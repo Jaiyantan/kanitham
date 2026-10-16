@@ -1,0 +1,422 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activity_log {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type String
+  entity_id   String    @db.Uuid
+  action      String
+  description String?
+  old_data    Json?
+  new_data    Json?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at(sort: Desc)], map: "idx_alog_date")
+  @@index([entity_type, entity_id], map: "idx_alog_entity")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model app_settings {
+  key         String    @id
+  value       Json
+  description String?
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model customers {
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  company_type           company_type     @default(OTHER)
+  gstn                   String?          @db.VarChar(15)
+  contact_person         String?
+  phone                  String?          @db.VarChar(15)
+  phone_secondary        String?          @db.VarChar(15)
+  email                  String?
+  whatsapp_number        String?          @db.VarChar(15)
+  address_line1          String?
+  address_line2          String?
+  city                   String?          @default("Chennai")
+  state                  String?          @default("Tamil Nadu")
+  pincode                String?          @db.VarChar(6)
+  opening_balance_amount Decimal?         @default(0) @db.Decimal(12, 2)
+  opening_balance_date   DateTime?        @db.Date
+  notes                  String?
+  is_active              Boolean?         @default(true)
+  created_at             DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime?        @default(now()) @db.Timestamptz(6)
+  deleted_at             DateTime?        @db.Timestamptz(6)
+  deliveries             deliveries[]
+  godown_batches         godown_batches[]
+  lorry_items            lorry_items[]
+  orders                 orders[]
+  payments               payments[]
+  products               products[]
+
+  @@index([name], map: "idx_customers_name")
+  @@index([company_type], map: "idx_customers_type")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model deliveries {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challan_number     BigInt           @default(autoincrement())
+  order_id           String           @db.Uuid
+  customer_id        String           @db.Uuid
+  delivery_date      DateTime         @default(dbgenerated("CURRENT_DATE")) @db.Date
+  delivery_type      delivery_type?   @default(PARTIAL)
+  quantity_delivered Decimal          @db.Decimal(10, 2)
+  quantity_unit      String?          @default("kg")
+  delivery_mode      String?
+  vehicle_number     String?          @db.VarChar(20)
+  received_by        String?
+  is_historical      Boolean?         @default(false)
+  notes              String?
+  created_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  customers          customers        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders             orders           @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  delivery_items     delivery_items[]
+
+  @@index([customer_id], map: "idx_deliveries_customer")
+  @@index([delivery_date(sort: Desc)], map: "idx_deliveries_date")
+  @@index([order_id], map: "idx_deliveries_order")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model delivery_items {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_id     String         @db.Uuid
+  godown_batch_id String         @db.Uuid
+  quantity        Decimal        @db.Decimal(10, 2)
+  created_at      DateTime?      @default(now()) @db.Timestamptz(6)
+  deliveries      deliveries     @relation(fields: [delivery_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  godown_batches  godown_batches @relation(fields: [godown_batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([godown_batch_id], map: "idx_ditems_batch")
+  @@index([delivery_id], map: "idx_ditems_delivery")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model designs {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id             String         @db.Uuid
+  version_number       Int            @default(1)
+  status               design_status? @default(PENDING)
+  file_url             String?
+  file_name            String?
+  customer_feedback    String?
+  internal_notes       String?
+  sent_for_approval_at DateTime?      @db.Timestamptz(6)
+  approved_at          DateTime?      @db.Timestamptz(6)
+  approved_by          String?
+  created_at           DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?      @default(now()) @db.Timestamptz(6)
+  orders               orders         @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  print_jobs           print_jobs[]
+
+  @@unique([order_id, version_number])
+  @@index([order_id], map: "idx_designs_order")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model godown_batches {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lorry_id           String?          @db.Uuid
+  lorry_item_id      String?          @db.Uuid
+  order_id           String           @db.Uuid
+  customer_id        String           @db.Uuid
+  product_id         String?          @db.Uuid
+  quantity_received  Decimal          @db.Decimal(10, 2)
+  quantity_remaining Decimal          @db.Decimal(10, 2)
+  quantity_unit      String?          @default("kg")
+  received_date      DateTime         @default(dbgenerated("CURRENT_DATE")) @db.Date
+  is_historical      Boolean?         @default(false)
+  notes              String?
+  created_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?        @default(now()) @db.Timestamptz(6)
+  delivery_items     delivery_items[]
+  customers          customers        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lorries            lorries?         @relation(fields: [lorry_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lorry_items        lorry_items?     @relation(fields: [lorry_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders             orders           @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  products           products?        @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_godown_customer")
+  @@index([order_id], map: "idx_godown_order")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model lorries {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lr_number             String           @db.VarChar(50)
+  booking_date          DateTime?        @db.Date
+  transporter_name      String
+  transporter_phone     String?          @db.VarChar(15)
+  driver_name           String?
+  driver_phone          String?          @db.VarChar(15)
+  vehicle_number        String?          @db.VarChar(20)
+  origin_city           String?          @default("Delhi")
+  destination_city      String?          @default("Chennai")
+  dispatch_date         DateTime?        @db.Date
+  expected_arrival_date DateTime?        @db.Date
+  actual_arrival_date   DateTime?        @db.Date
+  lorry_office_name     String?
+  lorry_office_address  String?
+  lorry_office_phone    String?          @db.VarChar(15)
+  tempo_booked          Boolean?         @default(false)
+  tempo_booking_date    DateTime?        @db.Date
+  tempo_cost            Decimal?         @db.Decimal(10, 2)
+  tempo_vehicle_number  String?          @db.VarChar(20)
+  pickup_date           DateTime?        @db.Date
+  freight_cost          Decimal?         @db.Decimal(10, 2)
+  freight_paid          Boolean?         @default(false)
+  status                lorry_status?    @default(BOOKED)
+  notes                 String?
+  created_at            DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?        @default(now()) @db.Timestamptz(6)
+  godown_batches        godown_batches[]
+  lorry_items           lorry_items[]
+
+  @@index([expected_arrival_date], map: "idx_lorries_eta")
+  @@index([lr_number], map: "idx_lorries_lr")
+  @@index([status], map: "idx_lorries_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model lorry_items {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lorry_id       String           @db.Uuid
+  print_job_id   String?          @db.Uuid
+  order_id       String           @db.Uuid
+  customer_id    String           @db.Uuid
+  product_id     String?          @db.Uuid
+  quantity       Decimal          @db.Decimal(10, 2)
+  quantity_unit  String?          @default("kg")
+  weight_kg      Decimal?         @db.Decimal(10, 2)
+  notes          String?
+  created_at     DateTime?        @default(now()) @db.Timestamptz(6)
+  godown_batches godown_batches[]
+  customers      customers        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lorries        lorries          @relation(fields: [lorry_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  orders         orders           @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  print_jobs     print_jobs?      @relation(fields: [print_job_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  products       products?        @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_litems_customer")
+  @@index([lorry_id], map: "idx_litems_lorry")
+  @@index([order_id], map: "idx_litems_order")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model order_status_history {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id   String        @db.Uuid
+  old_status order_status?
+  new_status order_status
+  changed_at DateTime?     @default(now()) @db.Timestamptz(6)
+  changed_by String?
+  orders     orders        @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([changed_at(sort: Desc)], map: "idx_osh_date")
+  @@index([order_id], map: "idx_osh_order")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model orders {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number           BigInt                 @default(autoincrement())
+  customer_id            String                 @db.Uuid
+  product_id             String?                @db.Uuid
+  order_date             DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  expected_delivery_date DateTime?              @db.Date
+  quantity_ordered       Decimal                @db.Decimal(10, 2)
+  quantity_unit          String?                @default("kg")
+  rate_per_unit          Decimal                @db.Decimal(10, 2)
+  total_amount           Decimal                @db.Decimal(14, 2)
+  status                 order_status?          @default(ORDER_RECEIVED)
+  status_changed_at      DateTime?              @default(now()) @db.Timestamptz(6)
+  is_historical          Boolean?               @default(false)
+  notes                  String?
+  created_at             DateTime?              @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime?              @default(now()) @db.Timestamptz(6)
+  deleted_at             DateTime?              @db.Timestamptz(6)
+  deliveries             deliveries[]
+  designs                designs[]
+  godown_batches         godown_batches[]
+  lorry_items            lorry_items[]
+  order_status_history   order_status_history[]
+  customers              customers              @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  products               products?              @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  print_jobs             print_jobs[]
+
+  @@index([customer_id], map: "idx_orders_customer")
+  @@index([order_date(sort: Desc)], map: "idx_orders_date")
+  @@index([product_id], map: "idx_orders_product")
+  @@index([status], map: "idx_orders_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payments {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id      String       @db.Uuid
+  amount           Decimal      @db.Decimal(14, 2)
+  payment_date     DateTime     @default(dbgenerated("CURRENT_DATE")) @db.Date
+  payment_mode     payment_mode
+  reference_number String?      @db.VarChar(100)
+  bank_name        String?
+  is_historical    Boolean?     @default(false)
+  notes            String?
+  created_at       DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?    @default(now()) @db.Timestamptz(6)
+  customers        customers    @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customer_id], map: "idx_payments_customer")
+  @@index([payment_date(sort: Desc)], map: "idx_payments_date")
+  @@index([payment_mode], map: "idx_payments_mode")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model print_jobs {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id               String            @db.Uuid
+  design_id              String?           @db.Uuid
+  printer_id             String?           @db.Uuid
+  material_type          String?
+  width_mm               Decimal?          @db.Decimal(8, 2)
+  height_mm              Decimal?          @db.Decimal(8, 2)
+  color_count            Int?
+  quantity               Decimal           @db.Decimal(10, 2)
+  quantity_unit          String?           @default("kg")
+  sent_date              DateTime?         @db.Date
+  expected_dispatch_date DateTime?         @db.Date
+  actual_dispatch_date   DateTime?         @db.Date
+  cost_per_unit          Decimal?          @db.Decimal(10, 2)
+  total_cost             Decimal?          @db.Decimal(14, 2)
+  status                 print_job_status? @default(ORDER_PLACED)
+  notes                  String?
+  created_at             DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime?         @default(now()) @db.Timestamptz(6)
+  lorry_items            lorry_items[]
+  designs                designs?          @relation(fields: [design_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders                 orders            @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  printers               printers?         @relation(fields: [printer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_pjobs_order")
+  @@index([status], map: "idx_pjobs_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model printers {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  contact_person String?
+  phone          String?      @db.VarChar(15)
+  email          String?
+  address        String?
+  city           String?      @default("Delhi")
+  is_active      Boolean?     @default(true)
+  created_at     DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?    @default(now()) @db.Timestamptz(6)
+  print_jobs     print_jobs[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model products {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id      String           @db.Uuid
+  sku_code         String?          @db.VarChar(50)
+  name             String
+  description      String?
+  material_type    String?
+  width_mm         Decimal?         @db.Decimal(8, 2)
+  height_mm        Decimal?         @db.Decimal(8, 2)
+  thickness_micron Decimal?         @db.Decimal(6, 2)
+  color_count      Int?
+  default_rate     Decimal?         @db.Decimal(10, 2)
+  rate_unit        String?          @default("per_kg")
+  is_active        Boolean?         @default(true)
+  created_at       DateTime?        @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?        @default(now()) @db.Timestamptz(6)
+  godown_batches   godown_batches[]
+  lorry_items      lorry_items[]
+  orders           orders[]
+  customers        customers        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([customer_id, sku_code])
+  @@index([customer_id], map: "idx_products_customer")
+}
+
+enum company_type {
+  SNACKS
+  CHIPS
+  GROUNDNUT
+  PICKLE
+  MASALA
+  FMCG_OTHER
+  OTHER
+}
+
+enum delivery_type {
+  FULL
+  PARTIAL
+}
+
+enum design_status {
+  PENDING
+  IN_PROGRESS
+  SENT_FOR_APPROVAL
+  REVISION_REQUIRED
+  APPROVED
+  SENT_TO_PRINT
+}
+
+enum lorry_status {
+  BOOKED
+  DISPATCHED
+  IN_TRANSIT
+  ARRIVED_AT_OFFICE
+  TEMPO_BOOKED
+  PICKED_UP
+  RECEIVED_IN_GODOWN
+}
+
+enum order_status {
+  ORDER_RECEIVED
+  DESIGN_PENDING
+  DESIGN_IN_PROGRESS
+  DESIGN_APPROVED
+  SENT_TO_PRINT
+  PRINTING
+  PRINT_DISPATCHED
+  IN_TRANSIT
+  ARRIVED_AT_LORRY_OFFICE
+  RECEIVED_IN_GODOWN
+  PARTIALLY_DELIVERED
+  FULLY_DELIVERED
+  CLOSED
+}
+
+enum payment_mode {
+  RTGS
+  NEFT
+  CASH
+  GPAY
+  UPI_OTHER
+  CHEQUE
+}
+
+enum print_job_status {
+  ORDER_PLACED
+  IN_PRODUCTION
+  READY_FOR_DISPATCH
+  DISPATCHED
+}
